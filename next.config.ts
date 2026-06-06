@@ -15,7 +15,6 @@ const nextConfig: NextConfig = {
   },
   // Desactivamos temporalmente el indicador visual de Turbopack si estorba en desarrollo
   devIndicators: {
-    appIsrStatus: false,
   },
 };
 
