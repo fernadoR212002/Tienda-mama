@@ -1,0 +1,83 @@
+export interface Product {
+  id: string;
+  nombre: string;
+  categoria: string;
+  precio: number;
+  imagenURL: string;
+}
+
+interface AirtableRecord {
+  id: string;
+  fields: {
+    Nombre?: string;
+    Categoria?: string;
+    Precio?: number;
+    ImagenURL?: string | Array<{ url: string }>;
+  };
+}
+
+interface AirtableResponse {
+  records: AirtableRecord[];
+  offset?: string;
+}
+
+function 
+
+getImageUrl(value: AirtableRecord["fields"]["ImagenURL"]): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value[0]?.url ?? "";
+}
+
+export async function getProducts(): Promise<Product[]> {
+  const token = process.env.AIRTABLE_TOKEN;
+  const baseId = process.env.AIRTABLE_BASE_ID;
+  const table = process.env.AIRTABLE_TABLE_NAME ?? "Productos";
+
+  // Si no hay variables de entorno configuradas todavía, usamos datos de prueba
+  if (!token || !baseId) {
+    return [
+      { id: "1", nombre: "Gorra Urbana Black", categoria: "Gorras", precio: 45000, imagenURL: "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?q=80&w=800" },
+      { id: "2", nombre: "Set Sábanas Satín", categoria: "Sábanas", precio: 120000, imagenURL: "https://images.unsplash.com/photo-1522771730849-fb3d523881c2?q=80&w=800" },
+      { id: "3", nombre: "Camiseta Oversize", categoria: "Camisetas", precio: 55000, imagenURL: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=800" },
+    ];
+  }
+
+  const endpoint = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}`;
+  const products: Product[] = [];
+  let offset: string | undefined;
+
+  try {
+    do {
+      const url = new URL(endpoint);
+      url.searchParams.set("pageSize", "100");
+      if (offset) url.searchParams.set("offset", offset);
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        next: { revalidate: 3600 }, // Refresca los datos cada hora
+      });
+
+      if (!res.ok) throw new Error(`Airtable error: ${res.status}`);
+      
+      const data: AirtableResponse = await res.json();
+      for (const record of data.records) {
+        const f = record.fields;
+        if (!f.Nombre || f.Precio == null) continue;
+        products.push({
+          id: record.id,
+          nombre: f.Nombre,
+          categoria: f.Categoria ?? "Sin categoría",
+          precio: Number(f.Precio),
+          imagenURL: getImageUrl(f.ImagenURL),
+        });
+      }
+      offset = data.offset;
+    } while (offset);
+
+    return products;
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
